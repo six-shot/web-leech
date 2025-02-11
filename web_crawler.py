@@ -6,7 +6,7 @@ from urllib.parse import urljoin
 from typing import List, Set
 
 # Define target URL and file types
-BASE_URL = "https://www.justice.gov/archives/eoir/dhs-aao-ins-decisions"
+BASE_URL = "https://www.uscis.gov/administrative-appeals/aao-decisions/aao-non-precedent-decisions?items_per_page=10"
 DOWNLOAD_FOLDER = "downloads"
 FILE_EXTENSIONS = [".pdf", ".zip"]  # Add more extensions if needed
 
@@ -51,25 +51,42 @@ class WebCrawler:
             return False
 
     def crawl(self) -> None:
-        """Start crawling from the base URL."""
-        try:
-            response = requests.get(self.base_url, timeout=30)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, "html.parser")
-            for link in soup.find_all("a", href=True):
-                file_url = urljoin(self.base_url, link["href"])
-                if any(file_url.endswith(ext) for ext in self.file_extensions):
-                    if self.download_file(file_url):
-                        # Add delay between downloads to be polite
-                        time.sleep(self.delay)
+        """Start crawling from the base URL and handle pagination."""
+        page = 0
+        while True:
+            page_url = f"{self.base_url}&page={page}"
+            try:
+                print(f"Crawling page {page}...")
+                response = requests.get(page_url, timeout=30)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.text, "html.parser")
+                links = soup.find_all("a", href=True)
+                
+                # Check if we found any links on this page
+                found_files = False
+                for link in links:
+                    file_url = urljoin(self.base_url, link["href"])
+                    if any(file_url.endswith(ext) for ext in self.file_extensions):
+                        found_files = True
+                        if self.download_file(file_url):
+                            # Add delay between downloads to be polite
+                            time.sleep(self.delay)
+                
+                # If no files found on this page, we've reached the end
+                if not found_files:
+                    print(f"No more files found after page {page}. Stopping.")
+                    break
+                
+                page += 1
                         
-        except requests.RequestException as e:
-            print(f"Error accessing {self.base_url}: {str(e)}")
+            except requests.RequestException as e:
+                print(f"Error accessing {page_url}: {str(e)}")
+                break
 
 def main():
     # Configuration
-    BASE_URL = "https://www.justice.gov/archives/eoir/dhs-aao-ins-decisions"
+    BASE_URL = "https://www.uscis.gov/administrative-appeals/aao-decisions/aao-non-precedent-decisions?items_per_page=10"
     DOWNLOAD_FOLDER = "downloads"
     FILE_EXTENSIONS = [".pdf", ".zip"]
     
